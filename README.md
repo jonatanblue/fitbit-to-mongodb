@@ -43,6 +43,7 @@ pip3 install -r requirements.txt
 ## Run
 
 Set secrets as environment variables:
+
 ```
 $ export FITBIT_KEY=redacted
 $ export FITBIT_SECRET=redacted
@@ -50,7 +51,10 @@ $ export FITBIT_ACCESS_TOKEN=redacted
 $ export FITBIT_REFRESH_TOKEN=redacted
 ```
 
+
+
 Load the past two days of data into MongoDB:
+
 ```
 $ ./fitbit_to_mongodb.py --type heart --days 2
 INFO:fitbit-mongodb-loader:Preparing to load dates ['2019-02-01', '2019-02-02']
@@ -61,6 +65,7 @@ INFO:fitbit-mongodb-loader:Successfully wrote record for 2019-02-02
 ```
 
 Loading the same range again will not result in any requests to the FitBit API:
+
 ```
 $ ./fitbit_to_mongodb.py --type heart --days 2
 INFO:fitbit-mongodb-loader:Preparing to load dates ['2019-02-01', '2019-02-02']
