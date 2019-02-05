@@ -24,21 +24,32 @@ class Loader():
             handlers=[stdout_handler]
         )
         self.logger = logging.getLogger(name='fitbit-mongodb-loader')
+
+        # Connect to FitBit
         key = os.environ["FITBIT_KEY"]
         secret = os.environ["FITBIT_SECRET"]
         access_token = os.environ["FITBIT_ACCESS_TOKEN"]
         refresh_token = os.environ["FITBIT_REFRESH_TOKEN"]
-        self.client = fitbit.Fitbit(
+        self.fitbit_client = fitbit.Fitbit(
             key,
             secret,
             access_token=access_token,
             refresh_token=refresh_token
         )
 
-class HeartLoader(Loader):
-    """ Heart rate loader """
-    def __init__(self, *args, **kwargs):
-        super(HeartLoader, self).__init__(*args, **kwargs)
+        # Create MongoDB connectION
+        mongodb_client = MongoClient()
+        self.db = mongodb_client.fitbit
+
+        # Empty vars -- need to be filled by child class
+        self.collection_name = None
+        self.document_key = None
+        self.timestamp_key = None
+        self.request_args = {}
+
+    def get_fitbit_data(self, request_args):
+        """ Get FitBit data """
+        return self.fitbit_client.time_series(**request_args)
 
     def load(self, days=None):
         """
@@ -60,16 +71,19 @@ class HeartLoader(Loader):
             days_back -= 1
         self.logger.info("Preparing to load dates {}".format(all_dates))
 
-        # Create MongoDB connectION
-        client = MongoClient()
-        db = client.fitbit
-        heart_collection = db.heart
+        collection = self.db.get_collection(name=self.collection_name)
 
         for base_date in all_dates:
+            self.request_args["base_date"] = base_date
+
             # Check that data doesn't already exist in MongoDB
-            cursor = heart_collection.find(
+            search_key = "{}.0.{}".format(
+                self.document_key,
+                self.timestamp_key
+            )
+            cursor = collection.find(
                 {
-                    "activities-heart.0.dateTime": base_date
+                    search_key: base_date
                 }
             )
             documents = [x for x in cursor]
@@ -90,19 +104,14 @@ class HeartLoader(Loader):
 
             # Get data from FitBit API
             self.logger.info("Connecting to FitBit API...")
-            data_blob = self.client.intraday_time_series(
-                "activities/heart",
-                base_date=base_date,
-                detail_level="1sec"
-            )
-            actual_date = data_blob["activities-heart"][0]["dateTime"]
+            data_blob = self.get_fitbit_data(self.request_args)
 
             # Load data into MongoDB
             try:
-                heart_collection.insert_one(data_blob)
+                collection.insert_one(data_blob)
                 self.logger.info(
                     "Successfully wrote record for {}".format(
-                        actual_date
+                        base_date
                     )
                 )
             except DuplicateKeyError:
@@ -111,9 +120,26 @@ class HeartLoader(Loader):
                         "Entry already exists, "
                         "failed to write data for date {}"
                     ).format(
-                        actual_date
+                        base_date
                     )
                 )
+
+class HeartLoader(Loader):
+    """ Heart rate loader """
+    def __init__(self, *args, **kwargs):
+        super(HeartLoader, self).__init__(*args, **kwargs)
+        self.collection_name = "heart"
+        self.resource = "activities/heart"
+        self.document_key = "activities-heart"
+        self.timestamp_key = "dateTime"
+        self.request_args = {
+            "resource": self.resource,
+            "detail_level": "1sec"
+        }
+
+    def get_fitbit_data(self, request_args):
+        """ Override parent for heart rate """
+        return self.fitbit_client.intraday_time_series(**request_args)
 
 def parse_args(args):
     """ Parse CLI arguments """
@@ -151,7 +177,7 @@ def parse_args(args):
 def main():
     parsed = parse_args(sys.argv[1:])
 
-    if parsed.type == 'heart':
+    if parsed.type == "heart":
         heart_loader = HeartLoader(verbose=parsed.verbose)
         heart_loader.load(days=parsed.days)
 
