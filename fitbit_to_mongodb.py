@@ -47,6 +47,19 @@ class Loader():
         self.timestamp_key = None
         self.request_args = {}
 
+    def configure_collection(self):
+        """ Ensure that the collection is created and indexed """
+        # Create collection if not exists
+        if not self.collection_name in self.db.list_collection_names():
+            self.db.create_collection(self.collection_name)
+        # Make sure unique index is created
+        mongodb_index = "{}.0.{}".format(
+            self.document_key,
+            self.timestamp_key
+        )
+        collection = self.db.get_collection(self.collection_name)
+        collection.create_index(mongodb_index, unique=True)
+
     def get_fitbit_data(self, request_args):
         """ Get FitBit data """
         return self.fitbit_client.time_series(**request_args)
@@ -56,6 +69,9 @@ class Loader():
         Load data for <days> full days into the past
         from FitBit into MongoDB
         """
+        # First make sure MongoDB is set up properly
+        self.configure_collection()
+
         if days is None or type(days) != int:
             raise TypeError("days must be an integer")
         today = dt.datetime.today()
@@ -141,6 +157,23 @@ class HeartLoader(Loader):
         """ Override parent for heart rate """
         return self.fitbit_client.intraday_time_series(**request_args)
 
+class SleepLoader(Loader):
+    """ Sleep data loader """
+    def __init__(self, *args, **kwargs):
+        super(SleepLoader, self).__init__(*args, **kwargs)
+        self.collection_name = "sleep"
+        self.document_key = "sleep"
+        self.timestamp_key = "dateOfSleep"
+        self.request_args = {}
+
+    def get_fitbit_data(self, request_args):
+        """ Get sleep data """
+        date = dt.datetime.strptime(
+            request_args["base_date"],
+            "%Y-%m-%d"
+        )
+        return self.fitbit_client.get_sleep(date)
+
 def parse_args(args):
     """ Parse CLI arguments """
     parser = argparse.ArgumentParser(
@@ -178,8 +211,11 @@ def main():
     parsed = parse_args(sys.argv[1:])
 
     if parsed.type == "heart":
-        heart_loader = HeartLoader(verbose=parsed.verbose)
-        heart_loader.load(days=parsed.days)
+        loader = HeartLoader(verbose=parsed.verbose)
+    elif parsed.type == "sleep":
+        loader = SleepLoader(verbose=parsed.verbose)
+
+    loader.load(days=parsed.days)
 
 if __name__ == "__main__":
     main()
