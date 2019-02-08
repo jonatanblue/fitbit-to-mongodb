@@ -23,7 +23,7 @@ class Loader():
             level=log_level,
             handlers=[stdout_handler]
         )
-        self.logger = logging.getLogger(name='fitbit-mongodb-loader')
+        self.logger = logging.getLogger(name="fitbit-mongodb-loader")
 
         # Connect to FitBit
         key = os.environ["FITBIT_KEY"]
@@ -92,7 +92,7 @@ class Loader():
         for base_date in all_dates:
             self.request_args["base_date"] = base_date
 
-            # Check that data doesn't already exist in MongoDB
+            # Check that data doesn"t already exist in MongoDB
             search_key = "{}.0.{}".format(
                 self.document_key,
                 self.timestamp_key
@@ -180,27 +180,27 @@ def parse_args(args):
         description="Load FitBit data into MongoDB"
     )
     parser.add_argument(
-        '--type',
+        "--type",
         required=True,
         choices=[
-            'heart',
-            'sleep',
-            'steps',
-            'floors',
-            'distance',
-            'activity',
-            'calories'
+            "heart",
+            "sleep",
+            "steps",
+            "floors",
+            "distance",
+            "activity",
+            "calories"
         ]
     )
     parser.add_argument(
-        '--days',
+        "--days",
         type=int,
         required=True
     )
     parser.add_argument(
-        '--verbose',
-        '-v',
-        action='store_true'
+        "--verbose",
+        "-v",
+        action="store_true"
     )
     parsed = parser.parse_args(args)
     if parsed.days < 1:
@@ -214,6 +214,8 @@ def main():
         loader = HeartLoader(verbose=parsed.verbose)
     elif parsed.type == "sleep":
         loader = SleepLoader(verbose=parsed.verbose)
+    elif parsed.type == "steps":
+
 
     loader.load(days=parsed.days)
 
