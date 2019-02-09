@@ -49,16 +49,21 @@ class Loader():
 
     def configure_collection(self):
         """ Ensure that the collection is created and indexed """
+        if not self.document_key:
+            raise ValueError("self.document_key must not be None")
+        if not self.timestamp_key:
+            raise ValueError("self.timestamp_key must not be None")
+        # Define index
+        self.mongodb_index = "{}.0.{}".format(
+            self.document_key,
+            self.timestamp_key
+        )
         # Create collection if not exists
         if not self.collection_name in self.db.list_collection_names():
             self.db.create_collection(self.collection_name)
         # Make sure unique index is created
-        mongodb_index = "{}.0.{}".format(
-            self.document_key,
-            self.timestamp_key
-        )
         collection = self.db.get_collection(self.collection_name)
-        collection.create_index(mongodb_index, unique=True)
+        collection.create_index(self.mongodb_index, unique=True)
 
     def get_fitbit_data(self, request_args):
         """ Get FitBit data """
@@ -93,18 +98,20 @@ class Loader():
             self.request_args["base_date"] = base_date
 
             # Check that data doesn"t already exist in MongoDB
-            search_key = "{}.0.{}".format(
-                self.document_key,
-                self.timestamp_key
-            )
-            cursor = collection.find(
-                {
-                    search_key: base_date
-                }
-            )
+            mongo_query = {
+                self.mongodb_index: base_date
+            }
+            cursor = collection.find(mongo_query)
             documents = [x for x in cursor]
-            if len(documents) > 0:
-                if len(documents) > 1:
+            document_count = len(documents)
+            self.logger.debug(
+                "MongoDB query {} returned {} documents".format(
+                    mongo_query,
+                    document_count
+                )
+            )
+            if document_count > 0:
+                if document_count > 1:
                     raise RuntimeError(
                         "Duplicate entry detected, your database "
                         "is missing the uniqueness constrained index."
@@ -145,11 +152,10 @@ class HeartLoader(Loader):
     def __init__(self, *args, **kwargs):
         super(HeartLoader, self).__init__(*args, **kwargs)
         self.collection_name = "heart"
-        self.resource = "activities/heart"
         self.document_key = "activities-heart"
         self.timestamp_key = "dateTime"
         self.request_args = {
-            "resource": self.resource,
+            "resource": "activities/heart",
             "detail_level": "1sec"
         }
 
@@ -174,7 +180,31 @@ class SleepLoader(Loader):
         )
         return self.fitbit_client.get_sleep(date)
 
-def parse_args(args):
+class StepLoader(Loader):
+    """ Step data """
+    def __init__(self, *args, **kwargs):
+        super(StepLoader, self).__init__(*args, **kwargs)
+        self.collection_name = "steps"
+        self.document_key = "activities-steps"
+        self.timestamp_key = "dateTime"
+        self.request_args = {
+            "resource": "activities/steps",
+            "period": "1d"
+        }
+
+class FloorLoader(Loader):
+    """ Floor data """
+    def __init__(self, *args, **kwargs):
+        super(FloorLoader, self).__init__(*args, **kwargs)
+        self.collection_name = "floors"
+        self.document_key = "activities-floors"
+        self.timestamp_key = "dateTime"
+        self.request_args = {
+            "resource": "activities/floors",
+            "period": "1d"
+        }
+
+def parse_args(args, type_choices):
     """ Parse CLI arguments """
     parser = argparse.ArgumentParser(
         description="Load FitBit data into MongoDB"
@@ -182,15 +212,7 @@ def parse_args(args):
     parser.add_argument(
         "--type",
         required=True,
-        choices=[
-            "heart",
-            "sleep",
-            "steps",
-            "floors",
-            "distance",
-            "activity",
-            "calories"
-        ]
+        choices=type_choices
     )
     parser.add_argument(
         "--days",
@@ -208,14 +230,22 @@ def parse_args(args):
     return parsed
 
 def main():
-    parsed = parse_args(sys.argv[1:])
+    type_choices = {
+        "heart": "HeartLoader",
+        "sleep": "SleepLoader",
+        "steps": "StepLoader",
+        "floors": "FloorLoader",
+        "distance": None,
+        "activity": None,
+        "calories": None
+    }
+    parsed = parse_args(sys.argv[1:], type_choices.keys())
 
-    if parsed.type == "heart":
-        loader = HeartLoader(verbose=parsed.verbose)
-    elif parsed.type == "sleep":
-        loader = SleepLoader(verbose=parsed.verbose)
-    elif parsed.type == "steps":
-
+    loader = eval(
+        "{}(verbose=parsed.verbose)".format(
+            type_choices[parsed.type]
+        )
+    )
 
     loader.load(days=parsed.days)
 
