@@ -119,9 +119,12 @@ class Loader():
                 # Exactly one match was found, so skip the whole loading bit
                 self.logger.warning(
                     (
-                        "Document already exists for this date, "
+                        "Document already exists in {} for this date, "
                         "skipping {}"
-                    ).format(base_date)
+                    ).format(
+                        self.collection_name,
+                        base_date
+                    )
                 )
                 continue
 
@@ -228,6 +231,59 @@ class CaloriesLoader(Loader):
             "period": "1d"
         }
 
+class ActivityLoader(Loader):
+    """ Activity data (walking, running, etc) """
+    def __init__(self, *args, **kwargs):
+        super(ActivityLoader, self).__init__(*args, **kwargs)
+
+    def load(self, *args, **kwargs):
+        # Prepare list of configs to use for the load method
+        activity_types = [
+            {
+                "collection_name": "activity_sedentary",
+                "document_key": "activities-minutesSedentary",
+                "timestamp_key": "dateTime",
+                "request_args": {
+                    "resource": "activities/minutesSedentary",
+                    "period": "1d"
+                }
+            },
+            {
+                "collection_name": "activity_lightly_active",
+                "document_key": "activities-minutesLightlyActive",
+                "timestamp_key": "dateTime",
+                "request_args": {
+                    "resource": "activities/minutesLightlyActive",
+                    "period": "1d"
+                }
+            },
+            {
+                "collection_name": "activity_fairly_active",
+                "document_key": "activities-minutesFairlyActive",
+                "timestamp_key": "dateTime",
+                "request_args": {
+                    "resource": "activities/minutesFairlyActive",
+                    "period": "1d"
+                }
+            },
+            {
+                "collection_name": "activity_very_active",
+                "document_key": "activities-minutesVeryActive",
+                "timestamp_key": "dateTime",
+                "request_args": {
+                    "resource": "activities/minutesVeryActive",
+                    "period": "1d"
+                }
+            }
+        ]
+        for t in activity_types:
+            self.collection_name = t["collection_name"]
+            self.document_key = t["document_key"]
+            self.timestamp_key = t["timestamp_key"]
+            self.request_args = t["request_args"]
+            # Call the parent's load method for each activity type
+            super(ActivityLoader, self).load(*args, **kwargs)
+
 def parse_args(args, type_choices):
     """ Parse CLI arguments """
     parser = argparse.ArgumentParser(
@@ -260,7 +316,7 @@ def main():
         "steps": "StepLoader",
         "floors": "FloorLoader",
         "distance": "DistanceLoader",
-        "activity": None,
+        "activity": "ActivityLoader",
         "calories": "CaloriesLoader"
     }
     parsed = parse_args(sys.argv[1:], type_choices.keys())
