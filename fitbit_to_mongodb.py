@@ -204,6 +204,30 @@ class FloorLoader(Loader):
             "period": "1d"
         }
 
+class DistanceLoader(Loader):
+    """ Distance data """
+    def __init__(self, *args, **kwargs):
+        super(DistanceLoader, self).__init__(*args, **kwargs)
+        self.collection_name = "distance"
+        self.document_key = "activities-distance"
+        self.timestamp_key = "dateTime"
+        self.request_args = {
+            "resource": "activities/distance",
+            "period": "1d"
+        }
+
+class CaloriesLoader(Loader):
+    """ Calories data """
+    def __init__(self, *args, **kwargs):
+        super(CaloriesLoader, self).__init__(*args, **kwargs)
+        self.collection_name = "calories"
+        self.document_key = "activities-calories"
+        self.timestamp_key = "dateTime"
+        self.request_args = {
+            "resource": "activities/calories",
+            "period": "1d"
+        }
+
 def parse_args(args, type_choices):
     """ Parse CLI arguments """
     parser = argparse.ArgumentParser(
@@ -235,9 +259,9 @@ def main():
         "sleep": "SleepLoader",
         "steps": "StepLoader",
         "floors": "FloorLoader",
-        "distance": None,
+        "distance": "DistanceLoader",
         "activity": None,
-        "calories": None
+        "calories": "CaloriesLoader"
     }
     parsed = parse_args(sys.argv[1:], type_choices.keys())
 
