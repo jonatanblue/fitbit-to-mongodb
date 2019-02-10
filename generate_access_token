@@ -1,0 +1,6 @@
+#!/bin/bash
+output=$(python3 gather_keys_oauth2.py ${FITBIT_KEY?} ${FITBIT_SECRET?})
+access_token=$(echo ${output} | grep access_token | awk '{ print $3 }')
+refresh_token=$(echo ${output} | grep refresh_token | awk '{ print $3 }')
+export FITBIT_ACCESS_TOKEN="${access_token}"
+export FITBIT_REFRESH_TOKEN="${refresh_token}"

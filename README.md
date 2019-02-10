@@ -27,12 +27,6 @@ docker-compose up -d
 
 * TODO
 
-### Generate API tokens
-
-```
-#TODO
-```
-
 ## Install
 
 ```
@@ -47,11 +41,9 @@ Set secrets as environment variables:
 ```
 $ export FITBIT_KEY=redacted
 $ export FITBIT_SECRET=redacted
-$ export FITBIT_ACCESS_TOKEN=redacted
-$ export FITBIT_REFRESH_TOKEN=redacted
+$ . ./generate_access_token  # This will set the variables
+                             # FITBIT_ACCESS_TOKEN and FITBIT_REFRESH_TOKEN
 ```
-
-
 
 Load the past two days of data into MongoDB:
 
