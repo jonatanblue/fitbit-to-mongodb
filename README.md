@@ -25,9 +25,18 @@ docker-compose up -d
 
 ### Create Application
 
-* TODO
+1. Log in to [FitBit dev portal](https://dev.fitbit.com/apps/new)
+1. On the **Create new app** page fill in all required fields. Set **OAuth 2.0 Application Type** to `Personal` and make sure **Callback URL** is filled in exactly like this (including trailing slash): `http://127.0.0.1:8080/`
+
+   Select `Read-Only` for **Default Access Type** and for all other URLs just enter anything. They are required in the form, but for personal applications not actually needed or used.
+
+1. Click Save. You can now view your application details under [Manage my apps](https://dev.fitbit.com/apps).
+
+   Set `FITBIT_KEY` to the OAuth 2.0 Client ID and `FITBIT_SECRET` to the Client Secret in the Run step below.
 
 ## Install
+
+Recommended: [set up virtualenv](https://packaging.python.org/guides/installing-using-pip-and-virtualenv/)
 
 ```
 pip3 install -r requirements.txt
