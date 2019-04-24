@@ -69,14 +69,75 @@ class Loader():
         """ Get FitBit data """
         return self.fitbit_client.time_series(**request_args)
 
-    def load(self, days=None):
+    def load_date(self, date=None):
+        """
+        Load data from a specific date
+        """
+        self.request_args["base_date"] = date
+
+        # First make sure MongoDB is set up properly
+        self.configure_collection()
+        collection = self.db.get_collection(name=self.collection_name)
+
+        # Check that data doesn"t already exist in MongoDB
+        mongo_query = {
+            self.mongodb_index: date
+        }
+        cursor = collection.find(mongo_query)
+        documents = [x for x in cursor]
+        document_count = len(documents)
+        self.logger.debug(
+            "MongoDB query {} returned {} documents".format(
+                mongo_query,
+                document_count
+            )
+        )
+        if document_count > 0:
+            if document_count > 1:
+                raise RuntimeError(
+                    "Duplicate entry detected, your database "
+                    "is missing the uniqueness constrained index."
+                )
+            # Exactly one match was found, so skip the whole loading bit
+            self.logger.warning(
+                (
+                    "Document already exists in {} for this date, "
+                    "skipping {}"
+                ).format(
+                    self.collection_name,
+                    date
+                )
+            )
+            return None
+
+        # Get data from FitBit API
+        self.logger.info("Connecting to FitBit API...")
+        data_blob = self.get_fitbit_data(self.request_args)
+
+        # Load data into MongoDB
+        try:
+            collection.insert_one(data_blob)
+            self.logger.info(
+                "Successfully wrote record for {}".format(
+                    date
+                )
+            )
+        except DuplicateKeyError as e:
+            self.logger.warning(
+                (
+                    "Entry already exists, "
+                    "failed to write data for date {}"
+                ).format(
+                    date
+                )
+            )
+        return True
+
+    def load_days(self, days=None):
         """
         Load data for <days> full days into the past
         from FitBit into MongoDB
         """
-        # First make sure MongoDB is set up properly
-        self.configure_collection()
-
         if days is None or type(days) != int:
             raise TypeError("days must be an integer")
         today = dt.datetime.today()
@@ -92,63 +153,8 @@ class Loader():
             days_back -= 1
         self.logger.info("Preparing to load dates {}".format(all_dates))
 
-        collection = self.db.get_collection(name=self.collection_name)
-
         for base_date in all_dates:
-            self.request_args["base_date"] = base_date
-
-            # Check that data doesn"t already exist in MongoDB
-            mongo_query = {
-                self.mongodb_index: base_date
-            }
-            cursor = collection.find(mongo_query)
-            documents = [x for x in cursor]
-            document_count = len(documents)
-            self.logger.debug(
-                "MongoDB query {} returned {} documents".format(
-                    mongo_query,
-                    document_count
-                )
-            )
-            if document_count > 0:
-                if document_count > 1:
-                    raise RuntimeError(
-                        "Duplicate entry detected, your database "
-                        "is missing the uniqueness constrained index."
-                    )
-                # Exactly one match was found, so skip the whole loading bit
-                self.logger.warning(
-                    (
-                        "Document already exists in {} for this date, "
-                        "skipping {}"
-                    ).format(
-                        self.collection_name,
-                        base_date
-                    )
-                )
-                continue
-
-            # Get data from FitBit API
-            self.logger.info("Connecting to FitBit API...")
-            data_blob = self.get_fitbit_data(self.request_args)
-
-            # Load data into MongoDB
-            try:
-                collection.insert_one(data_blob)
-                self.logger.info(
-                    "Successfully wrote record for {}".format(
-                        base_date
-                    )
-                )
-            except DuplicateKeyError:
-                self.logger.warning(
-                    (
-                        "Entry already exists, "
-                        "failed to write data for date {}"
-                    ).format(
-                        base_date
-                    )
-                )
+            self.load_date(base_date)
 
 class HeartLoader(Loader):
     """ Heart rate loader """
@@ -297,7 +303,12 @@ def parse_args(args, type_choices):
     parser.add_argument(
         "--days",
         type=int,
-        required=True
+        required=False
+    )
+    parser.add_argument(
+        "--date",
+        type=str,
+        required=False
     )
     parser.add_argument(
         "--verbose",
@@ -305,7 +316,9 @@ def parse_args(args, type_choices):
         action="store_true"
     )
     parsed = parser.parse_args(args)
-    if parsed.days < 1:
+    if (parsed.days and parsed.date) or (parsed.date and parsed.days):
+        parser.error("--date and --days are mutually exclusive")
+    if parsed.days and parsed.days < 1:
         parser.error("Minimum days is 1")
     return parsed
 
@@ -327,7 +340,12 @@ def main():
         )
     )
 
-    loader.load(days=parsed.days)
+    if parsed.days:
+        loader.load_days(days=parsed.days)
+    elif parsed.date:
+        loader.load_date(date=parsed.date)
+    else:
+        print("Exiting.")
 
 if __name__ == "__main__":
     main()
