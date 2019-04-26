@@ -69,7 +69,7 @@ class Loader():
         """ Get FitBit data """
         return self.fitbit_client.time_series(**request_args)
 
-    def load_date(self, date=None):
+    def load_date(self, date=None, update=False):
         """
         Load data from a specific date
         """
@@ -79,7 +79,7 @@ class Loader():
         self.configure_collection()
         collection = self.db.get_collection(name=self.collection_name)
 
-        # Check that data doesn"t already exist in MongoDB
+        # Check if data is already in MongoDB
         mongo_query = {
             self.mongodb_index: date
         }
@@ -98,39 +98,54 @@ class Loader():
                     "Duplicate entry detected, your database "
                     "is missing the uniqueness constrained index."
                 )
-            # Exactly one match was found, so skip the whole loading bit
-            self.logger.warning(
-                (
-                    "Document already exists in {} for this date, "
-                    "skipping {}"
-                ).format(
-                    self.collection_name,
-                    date
+            # Exactly one match was found
+            if not update:
+                self.logger.warning(
+                    (
+                        "Document already exists in {} for this date, "
+                        "skipping {}"
+                    ).format(
+                        self.collection_name,
+                        date
+                    )
                 )
-            )
-            return None
+                return None
+            else:
+                document_id = documents[0]["_id"]
 
         # Get data from FitBit API
         self.logger.info("Connecting to FitBit API...")
         data_blob = self.get_fitbit_data(self.request_args)
 
         # Load data into MongoDB
-        try:
-            collection.insert_one(data_blob)
+        if update:
+            collection.replace_one(
+                {"_id": document_id},
+                data_blob
+            )
             self.logger.info(
-                "Successfully wrote record for {}".format(
+                "Updated document {} for date {}".format(
+                    document_id,
                     date
                 )
             )
-        except DuplicateKeyError as e:
-            self.logger.warning(
-                (
-                    "Entry already exists, "
-                    "failed to write data for date {}"
-                ).format(
-                    date
+        else:
+            try:
+                collection.insert_one(data_blob)
+                self.logger.info(
+                    "Successfully wrote record for {}".format(
+                        date
+                    )
                 )
-            )
+            except DuplicateKeyError:
+                self.logger.warning(
+                    (
+                        "Entry already exists, "
+                        "failed to write data for date {}"
+                    ).format(
+                        date
+                    )
+                )
         return True
 
     def load_days(self, days=None):
@@ -311,6 +326,12 @@ def parse_args(args, type_choices):
         required=False
     )
     parser.add_argument(
+        "--update",
+        help="Update existing entry",
+        action="store_true",
+        required=False
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true"
@@ -343,7 +364,7 @@ def main():
     if parsed.days:
         loader.load_days(days=parsed.days)
     elif parsed.date:
-        loader.load_date(date=parsed.date)
+        loader.load_date(date=parsed.date, update=parsed.update)
     else:
         print("Exiting.")
 
